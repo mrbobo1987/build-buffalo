@@ -1,4 +1,4 @@
-name: Buffalo WXR-6000AX12S - Qosmio Stable Fix
+name: Buffalo WXR-6000AX12S - Qosmio v4 Fix
 on:
   workflow_dispatch:
 
@@ -16,7 +16,7 @@ jobs:
 
       - name: 2. Clone Source Qosmio (NSS 6.1 Stable)
         run: |
-          # Source chuyên dụng cho Qualcomm IPQ807x
+          # Source chuyên dụng cho Qualcomm IPQ807x, ổn định nhất
           git clone -b nss-6.1 --single-branch https://github.com/qosmio/openwrt-ipq807x.git openwrt
 
       - name: 3. Cập nhật Feeds
@@ -31,6 +31,7 @@ jobs:
           cd openwrt
           
           # --- A. DEVICE PROFILE ---
+          # Dùng profile 5950ax12 cho 6000ax12s (chung phần cứng)
           echo "CONFIG_TARGET_qualcommax=y" > .config
           echo "CONFIG_TARGET_qualcommax_ipq807x=y" >> .config
           echo "CONFIG_TARGET_qualcommax_ipq807x_DEVICE_buffalo_wxr-5950ax12=y" >> .config
@@ -39,12 +40,17 @@ jobs:
           echo "CONFIG_PACKAGE_kmod-qca-nss-drv=y" >> .config
           echo "CONFIG_PACKAGE_kmod-qca-nss-ecm=y" >> .config
           echo "CONFIG_PACKAGE_kmod-qca-nss-dp=y" >> .config
+          # Tăng tốc quay số PPPoE
           echo "CONFIG_PACKAGE_kmod-qca-nss-drv-pppoe=y" >> .config
+          # Tăng tốc xử lý VLAN tag
           echo "CONFIG_PACKAGE_kmod-qca-nss-drv-vlan-mgr=y" >> .config
+          # Tăng tốc Bridge
           echo "CONFIG_PACKAGE_kmod-qca-nss-drv-bridge-mgr=y" >> .config
+          # Tăng tốc mã hóa
           echo "CONFIG_PACKAGE_kmod-qca-nss-crypto=y" >> .config
 
           # --- C. AQUANTIA 10G FIX ---
+          # Firmware bắt buộc cho chip 10G AQR113C
           echo "CONFIG_PACKAGE_kmod-phy-aquantia=y" >> .config
           echo "CONFIG_PACKAGE_aquantia-firmware-aqr113c=y" >> .config
 
@@ -53,6 +59,7 @@ jobs:
           echo "CONFIG_PACKAGE_irqbalance=y" >> .config
 
           # --- E. CONFLICT PREVENTION (Tắt Offload mềm) ---
+          # Tắt mấy cái này để NSS không bị xung đột
           echo "# CONFIG_PACKAGE_kmod-ipt-offload is not set" >> .config
           echo "# CONFIG_PACKAGE_kmod-nft-offload is not set" >> .config
           echo "# CONFIG_PACKAGE_kmod-shortcut-fe is not set" >> .config
@@ -60,20 +67,4 @@ jobs:
           # --- F. PACKAGES ---
           echo "CONFIG_PACKAGE_luci=y" >> .config
           echo "CONFIG_PACKAGE_luci-ssl=y" >> .config
-          echo "CONFIG_PACKAGE_ath11k-firmware-ipq8074=y" >> .config
-          echo "CONFIG_PACKAGE_wpad-openssl=y" >> .config
-
-          make defconfig
-
-      - name: 5. Build Firmware
-        run: |
-          cd openwrt
-          make download -j$(nproc)
-          make -j$(nproc) || make -j1 V=s
-
-      - name: 6. Upload Artifacts (Fix v4)
-        # SỬA LỖI Ở ĐÂY: Dùng v4 thay vì v3
-        uses: actions/upload-artifact@v4
-        with:
-          name: Buffalo-6000AX12S-Final
-          path: openwrt/bin/targets/qualcommax/ipq807x/*sysupgrade.bin
+          echo "CONFIG_PACKAGE_ath11k-firmware-ipq8

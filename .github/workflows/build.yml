@@ -1,4 +1,4 @@
-name: Buffalo 6000AX12S - Qosmio 24.10 NSS 12.5
+name: Buffalo 6000AX12S - Qosmio Main-NSS (Quickstart)
 on:
   workflow_dispatch:
 
@@ -14,21 +14,23 @@ jobs:
           sudo apt update
           sudo apt install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev file wget
 
-      - name: 2. Clone Source Qosmio (Nhánh 24.10-nss6.6)
+      - name: 2. Clone Source Qosmio (Nhánh Main-NSS)
         run: |
-          # Nhánh này chạy Kernel 6.6, khớp với feed NSS-12.5-K6.x bạn đưa
-          git clone -b 24.10-nss6.6 --single-branch https://github.com/qosmio/openwrt-ipq.git openwrt
+          # SỬA LỖI 128: Dùng nhánh "main-nss" đúng theo hướng dẫn Quickstart của tác giả
+          # Nhánh 24.10-nss6.6 không tồn tại, ta không được tự bịa ra
+          git clone -b main-nss --single-branch https://github.com/qosmio/openwrt-ipq.git openwrt
 
-      - name: 3. Thiết lập Feeds (Theo thông tin bạn cung cấp)
+      - name: 3. Thiết lập Feeds (Đồng bộ với Main-NSS)
         run: |
           cd openwrt
           
-          # Ghi đè file feeds.conf.default bằng nội dung chính xác bạn đưa
+          # Vì dùng nhánh main-nss (Kernel 6.12), ta phải dùng feeds master để khớp kernel
+          # Tuy nhiên vẫn giữ feed NSS-12.5-K6.x vì nó hỗ trợ Kernel 6.x
           cat > feeds.conf.default <<EOF
-          src-git packages https://git.openwrt.org/feed/packages.git;openwrt-24.10
-          src-git luci https://git.openwrt.org/project/luci.git;openwrt-24.10
-          src-git routing https://git.openwrt.org/feed/routing.git;openwrt-24.10
-          src-git telephony https://git.openwrt.org/feed/telephony.git;openwrt-24.10
+          src-git packages https://git.openwrt.org/feed/packages.git;master
+          src-git luci https://git.openwrt.org/project/luci.git;master
+          src-git routing https://git.openwrt.org/feed/routing.git;master
+          src-git telephony https://git.openwrt.org/feed/telephony.git;master
           src-git nss_packages https://github.com/qosmio/nss-packages.git;NSS-12.5-K6.x
           src-git sqm_scripts_nss https://github.com/qosmio/sqm-scripts-nss.git
           EOF
@@ -41,7 +43,7 @@ jobs:
         run: |
           cd openwrt
           
-          # A. Dùng Seed File của Qosmio (Chuẩn NSS 12.5)
+          # A. Dùng Seed File của Qosmio (Chuẩn NSS)
           cp nss-setup/config-nss.seed .config
 
           # B. Bổ sung cấu hình Buffalo WXR-6000AX12S
@@ -50,7 +52,6 @@ jobs:
           echo "CONFIG_TARGET_qualcommax_ipq807x_DEVICE_buffalo_wxr-5950ax12=y" >> .config
 
           # C. Sửa lỗi cổng 10G (Aquantia AQR113C)
-          # Bắt buộc phải có firmware này
           echo "CONFIG_PACKAGE_kmod-phy-aquantia=y" >> .config
           echo "CONFIG_PACKAGE_aquantia-firmware-aqr113c=y" >> .config
 
@@ -61,11 +62,10 @@ jobs:
           echo "CONFIG_PACKAGE_ath11k-firmware-ipq8074=y" >> .config
           echo "CONFIG_PACKAGE_wpad-openssl=y" >> .config
 
-          # E. Tối ưu TCP BBR (Thay thế TurboACC)
+          # E. Tối ưu TCP BBR
           echo "CONFIG_PACKAGE_kmod-tcp-bbr=y" >> .config
 
           # F. CHỐNG XUNG ĐỘT (NSS Pure Mode)
-          # Tắt tất cả Offload mềm để NSS 12.5 hoạt động max công suất
           echo "# CONFIG_PACKAGE_kmod-ipt-offload is not set" >> .config
           echo "# CONFIG_PACKAGE_kmod-nft-offload is not set" >> .config
           echo "# CONFIG_PACKAGE_kmod-shortcut-fe is not set" >> .config
@@ -83,5 +83,5 @@ jobs:
       - name: 6. Upload Artifacts (v4)
         uses: actions/upload-artifact@v4
         with:
-          name: Buffalo-Qosmio-24.10-NSS12.5
+          name: Buffalo-Qosmio-Main-NSS
           path: openwrt/bin/targets/qualcommax/ipq807x/*sysupgrade.bin

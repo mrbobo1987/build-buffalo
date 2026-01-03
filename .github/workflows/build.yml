@@ -1,4 +1,4 @@
-name: Buffalo WXR-6000AX12S - Qosmio v4 Fix
+name: Buffalo WXR-6000AX12S - Qosmio Correct Source
 on:
   workflow_dispatch:
 
@@ -8,67 +8,71 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: 1. Dọn dẹp & Cài đặt (Clean Setup)
+      - name: 1. Dọn dẹp & Cài đặt
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
           sudo apt update
           sudo apt install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev file wget
 
-      - name: 2. Clone Source Qosmio (NSS 6.1 Stable)
+      - name: 2. Clone Source Qosmio (URL CHÍNH XÁC)
         run: |
-          # Source chuyên dụng cho Qualcomm IPQ807x, ổn định nhất
-          git clone -b nss-6.1 --single-branch https://github.com/qosmio/openwrt-ipq807x.git openwrt
+          # Đã sửa lại đường dẫn theo đúng repo bạn tìm thấy: openwrt-ipq
+          # Nhánh nss-6.1 là nhánh ổn định nhất hiện tại của Qosmio
+          git clone -b nss-6.1 --single-branch https://github.com/qosmio/openwrt-ipq.git openwrt
 
       - name: 3. Cập nhật Feeds
         run: |
           cd openwrt
+          # Thêm nguồn NSS Packages (Repo này bạn cũng đã confirm là còn sống)
           echo "src-git nss_packages https://github.com/qosmio/nss-packages.git" >> feeds.conf.default
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: 4. Cấu hình Kỹ thuật (Logic chuẩn nhất)
+      - name: 4. Cấu hình "Pure NSS" (Chuẩn Buffalo 6000AX12S)
         run: |
           cd openwrt
           
           # --- A. DEVICE PROFILE ---
-          # Dùng profile 5950ax12 cho 6000ax12s (chung phần cứng)
+          # Profile WXR-5950AX12 tương thích hoàn toàn 6000AX12S
           echo "CONFIG_TARGET_qualcommax=y" > .config
           echo "CONFIG_TARGET_qualcommax_ipq807x=y" >> .config
           echo "CONFIG_TARGET_qualcommax_ipq807x_DEVICE_buffalo_wxr-5950ax12=y" >> .config
 
-          # --- B. NSS OFFLOAD (Bắt buộc cho PPPoE/VLAN VNPT) ---
+          # --- B. KÍCH HOẠT NSS TOÀN DIỆN ---
+          # Gánh tải PPPoE, VLAN, Bridge, Crypto
           echo "CONFIG_PACKAGE_kmod-qca-nss-drv=y" >> .config
           echo "CONFIG_PACKAGE_kmod-qca-nss-ecm=y" >> .config
           echo "CONFIG_PACKAGE_kmod-qca-nss-dp=y" >> .config
-          # Tăng tốc quay số PPPoE
           echo "CONFIG_PACKAGE_kmod-qca-nss-drv-pppoe=y" >> .config
-          # Tăng tốc xử lý VLAN tag
           echo "CONFIG_PACKAGE_kmod-qca-nss-drv-vlan-mgr=y" >> .config
-          # Tăng tốc Bridge
           echo "CONFIG_PACKAGE_kmod-qca-nss-drv-bridge-mgr=y" >> .config
-          # Tăng tốc mã hóa
           echo "CONFIG_PACKAGE_kmod-qca-nss-crypto=y" >> .config
 
-          # --- C. AQUANTIA 10G FIX ---
-          # Firmware bắt buộc cho chip 10G AQR113C
+          # --- C. FIX CỔNG 10G (AQUANTIA) ---
+          # Bắt buộc có để nhận cổng LAN 1
           echo "CONFIG_PACKAGE_kmod-phy-aquantia=y" >> .config
           echo "CONFIG_PACKAGE_aquantia-firmware-aqr113c=y" >> .config
 
-          # --- D. NETWORK OPTIMIZATION (BBR) ---
+          # --- D. TỐI ƯU MẠNG ---
           echo "CONFIG_PACKAGE_kmod-tcp-bbr=y" >> .config
           echo "CONFIG_PACKAGE_irqbalance=y" >> .config
 
-          # --- E. CONFLICT PREVENTION (Tắt Offload mềm) ---
-          # Tắt mấy cái này để NSS không bị xung đột
+          # --- E. TRÁNH XUNG ĐỘT (QUAN TRỌNG) ---
+          # Tắt Offload mềm để NSS chạy độc quyền -> Ổn định tuyệt đối
           echo "# CONFIG_PACKAGE_kmod-ipt-offload is not set" >> .config
           echo "# CONFIG_PACKAGE_kmod-nft-offload is not set" >> .config
           echo "# CONFIG_PACKAGE_kmod-shortcut-fe is not set" >> .config
+          echo "# CONFIG_PACKAGE_luci-app-turboacc is not set" >> .config
 
-          # --- F. PACKAGES ---
+          # --- F. GIAO DIỆN & WIFI ---
           echo "CONFIG_PACKAGE_luci=y" >> .config
           echo "CONFIG_PACKAGE_luci-ssl=y" >> .config
           echo "CONFIG_PACKAGE_ath11k-firmware-ipq8074=y" >> .config
           echo "CONFIG_PACKAGE_wpad-openssl=y" >> .config
+          
+          # Gói ngôn ngữ & Tiện ích
+          echo "CONFIG_PACKAGE_luci-i18n-base-vi=y" >> .config
+          echo "CONFIG_PACKAGE_htop=y" >> .config
 
           make defconfig
 
@@ -78,9 +82,8 @@ jobs:
           make download -j$(nproc)
           make -j$(nproc) || make -j1 V=s
 
-      - name: 6. Upload Artifacts (Fixed v4)
-        # ĐÂY LÀ DÒNG ĐÃ SỬA LỖI (v4)
+      - name: 6. Upload Artifacts (v4)
         uses: actions/upload-artifact@v4
         with:
-          name: Buffalo-6000AX12S-Final-v4
+          name: Buffalo-6000AX12S-Qosmio-Official
           path: openwrt/bin/targets/qualcommax/ipq807x/*sysupgrade.bin

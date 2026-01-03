@@ -1,0 +1,43 @@
+name: Build Buffalo Firmware
+on:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v3
+      - name: Space cleanup
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev file wget
+      - name: Clone source
+        run: |
+          git clone -b nss-6.1 https://github.com/qosmio/openwrt-ipq807x.git openwrt
+      - name: Update feeds
+        run: |
+          cd openwrt
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+      - name: Generate config
+        run: |
+          cd openwrt
+          echo "CONFIG_TARGET_qualcommax=y" > .config
+          echo "CONFIG_TARGET_qualcommax_ipq807x=y" >> .config
+          echo "CONFIG_TARGET_qualcommax_ipq807x_DEVICE_buffalo_wxr-5950ax12=y" >> .config
+          echo "CONFIG_PACKAGE_luci=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-firewall=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-qca-nss-drv=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-qca-nss-ecm=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-qca-nss-dp=y" >> .config
+          make defconfig
+      - name: Build
+        run: |
+          cd openwrt
+          make -j$(nproc)
+      - name: Upload firmware
+        uses: actions/upload-artifact@v3
+        with:
+          name: Buffalo-Firmware
+          path: openwrt/bin/targets/qualcommax/ipq807x/*.bin

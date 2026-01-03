@@ -1,4 +1,4 @@
-name: Buffalo 6000AX12S - Qosmio Official Seed
+name: Buffalo 6000AX12S - Qosmio 24.10 NSS 12.5
 on:
   workflow_dispatch:
 
@@ -14,56 +14,64 @@ jobs:
           sudo apt update
           sudo apt install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev file wget
 
-      - name: 2. Clone Source Qosmio (Nhánh Stable 24.10)
+      - name: 2. Clone Source Qosmio (Nhánh 24.10-nss6.6)
         run: |
-          # Dựa trên README: Branch 24.10-nss6.6 là bản Stable (Kernel 6.6)
-          # Đây là nhánh ổn định nhất hiện tại, thay vì main (unstable)
+          # Nhánh này chạy Kernel 6.6, khớp với feed NSS-12.5-K6.x bạn đưa
           git clone -b 24.10-nss6.6 --single-branch https://github.com/qosmio/openwrt-ipq.git openwrt
 
-      - name: 3. Cập nhật Feeds (Tự động nhận NSS)
-        run: |
-          cd openwrt
-          # Không cần add thủ công nữa vì commit mới nhất 17h trước đã thêm vào rồi
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
-
-      - name: 4. Nạp cấu hình từ Seed File (CỰC KỲ QUAN TRỌNG)
+      - name: 3. Thiết lập Feeds (Theo thông tin bạn cung cấp)
         run: |
           cd openwrt
           
-          # COPY SEED FILE: Đây là file cấu hình NSS chuẩn của tác giả
-          # Nó tự động bật tất cả NSS Drv, ECM, Crypto, DP... chuẩn từng milimet
+          # Ghi đè file feeds.conf.default bằng nội dung chính xác bạn đưa
+          cat > feeds.conf.default <<EOF
+          src-git packages https://git.openwrt.org/feed/packages.git;openwrt-24.10
+          src-git luci https://git.openwrt.org/project/luci.git;openwrt-24.10
+          src-git routing https://git.openwrt.org/feed/routing.git;openwrt-24.10
+          src-git telephony https://git.openwrt.org/feed/telephony.git;openwrt-24.10
+          src-git nss_packages https://github.com/qosmio/nss-packages.git;NSS-12.5-K6.x
+          src-git sqm_scripts_nss https://github.com/qosmio/sqm-scripts-nss.git
+          EOF
+
+          # Cập nhật và cài đặt
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: 4. Nạp cấu hình & Tối ưu cho Buffalo
+        run: |
+          cd openwrt
+          
+          # A. Dùng Seed File của Qosmio (Chuẩn NSS 12.5)
           cp nss-setup/config-nss.seed .config
 
-          # --- BỔ SUNG CẤU HÌNH CHO BUFFALO ---
-          # 1. Chọn thiết bị WXR-5950AX12 (Profile chung cho 6000AX12S)
+          # B. Bổ sung cấu hình Buffalo WXR-6000AX12S
           echo "CONFIG_TARGET_qualcommax=y" >> .config
           echo "CONFIG_TARGET_qualcommax_ipq807x=y" >> .config
           echo "CONFIG_TARGET_qualcommax_ipq807x_DEVICE_buffalo_wxr-5950ax12=y" >> .config
 
-          # 2. Fix cổng 10G (Aquantia AQR113C)
-          # Seed file có thể chưa bật cái này, ta phải ép bật
+          # C. Sửa lỗi cổng 10G (Aquantia AQR113C)
+          # Bắt buộc phải có firmware này
           echo "CONFIG_PACKAGE_kmod-phy-aquantia=y" >> .config
           echo "CONFIG_PACKAGE_aquantia-firmware-aqr113c=y" >> .config
 
-          # 3. Giao diện & Wifi
+          # D. Giao diện & Tiện ích
           echo "CONFIG_PACKAGE_luci=y" >> .config
           echo "CONFIG_PACKAGE_luci-ssl=y" >> .config
           echo "CONFIG_PACKAGE_luci-i18n-base-vi=y" >> .config
           echo "CONFIG_PACKAGE_ath11k-firmware-ipq8074=y" >> .config
           echo "CONFIG_PACKAGE_wpad-openssl=y" >> .config
 
-          # 4. Tối ưu TCP BBR (Thay thế TurboACC)
+          # E. Tối ưu TCP BBR (Thay thế TurboACC)
           echo "CONFIG_PACKAGE_kmod-tcp-bbr=y" >> .config
-          
-          # 5. CHỐNG XUNG ĐỘT (Theo cảnh báo của README)
-          # Tác giả bảo: "start fresh and disable all other offloading options"
+
+          # F. CHỐNG XUNG ĐỘT (NSS Pure Mode)
+          # Tắt tất cả Offload mềm để NSS 12.5 hoạt động max công suất
           echo "# CONFIG_PACKAGE_kmod-ipt-offload is not set" >> .config
           echo "# CONFIG_PACKAGE_kmod-nft-offload is not set" >> .config
           echo "# CONFIG_PACKAGE_kmod-shortcut-fe is not set" >> .config
           echo "# CONFIG_PACKAGE_luci-app-turboacc is not set" >> .config
 
-          # Tạo file config hoàn chỉnh từ Seed + Bổ sung
+          # Tạo file config hoàn chỉnh
           make defconfig
 
       - name: 5. Build Firmware
@@ -75,5 +83,5 @@ jobs:
       - name: 6. Upload Artifacts (v4)
         uses: actions/upload-artifact@v4
         with:
-          name: Buffalo-Qosmio-Seed-Stable
+          name: Buffalo-Qosmio-24.10-NSS12.5
           path: openwrt/bin/targets/qualcommax/ipq807x/*sysupgrade.bin

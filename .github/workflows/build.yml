@@ -67,4 +67,20 @@ jobs:
           # --- F. PACKAGES ---
           echo "CONFIG_PACKAGE_luci=y" >> .config
           echo "CONFIG_PACKAGE_luci-ssl=y" >> .config
-          echo "CONFIG_PACKAGE_ath11k-firmware-ipq8
+          echo "CONFIG_PACKAGE_ath11k-firmware-ipq8074=y" >> .config
+          echo "CONFIG_PACKAGE_wpad-openssl=y" >> .config
+
+          make defconfig
+
+      - name: 5. Build Firmware
+        run: |
+          cd openwrt
+          make download -j$(nproc)
+          make -j$(nproc) || make -j1 V=s
+
+      - name: 6. Upload Artifacts (Fixed v4)
+        # ĐÂY LÀ DÒNG ĐÃ SỬA LỖI (v4)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Buffalo-6000AX12S-Final-v4
+          path: openwrt/bin/targets/qualcommax/ipq807x/*sysupgrade.bin
